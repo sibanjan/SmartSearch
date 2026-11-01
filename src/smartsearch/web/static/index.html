@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SmartSearch</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #e3e1da;
+    --accent: #2f5d50; --accent-soft: #e4eee9; --mark: #fbe7a1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151614; --panel: #1e201d; --ink: #ecebe6; --muted: #9b9a93; --line: #2f322d;
+            --accent: #8cc7b2; --accent-soft: #233029; --mark: #5a4a12; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 { font: 600 28px/1.1 Georgia, "Iowan Old Style", serif; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  form { display: flex; gap: 8px; }
+  input[type=search] { flex: 1; font: inherit; font-size: 17px; padding: 14px 16px; border-radius: 10px;
+         border: 1px solid var(--line); background: var(--panel); color: var(--ink); outline: none; }
+  input[type=search]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+           padding: 0 16px; border-radius: 10px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 20px; align-items: center; }
+  .filters select, .filters input { font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px;
+         border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .result { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+            padding: 14px 16px; margin-bottom: 10px; }
+  .result .name { font-weight: 600; cursor: pointer; color: var(--accent); word-break: break-all; }
+  .result .name:hover { text-decoration: underline; }
+  .result .path { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .result .snip { margin-top: 6px; font-size: 14px; }
+  .result mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  .tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+  .tag { background: var(--accent-soft); color: var(--accent); padding: 1px 8px; border-radius: 999px; }
+  .tags .spacer { flex: 1; }
+  .tags a { color: var(--muted); cursor: pointer; }
+  .answer { background: var(--accent-soft); border-radius: 12px; padding: 16px; margin-bottom: 16px;
+            white-space: pre-wrap; }
+  .status { position: fixed; bottom: 12px; right: 16px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 600px) { form { flex-wrap: wrap; } form button { padding: 10px 14px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>SmartSearch</h1>
+  <p class="sub">Ask in plain language — searches meaning, keywords and file names. Everything stays on this computer.</p>
+
+  <form id="f">
+    <input id="q" type="search" placeholder="e.g. invoice from the plumber last spring" autofocus autocomplete="off" />
+    <button class="primary" type="submit">Search</button>
+    <button type="button" id="askBtn" title="Answer with a local LLM (Ollama)">Ask AI</button>
+  </form>
+
+  <div class="filters">
+    <select id="mode">
+      <option value="hybrid">Hybrid</option>
+      <option value="semantic">Semantic only</option>
+      <option value="keyword">Keyword only</option>
+    </select>
+    <select id="ext">
+      <option value="">All types</option>
+      <option value=".pdf">PDF</option>
+      <option value=".docx">Word</option>
+      <option value=".xlsx">Excel</option>
+      <option value=".pptx">PowerPoint</option>
+      <option value=".md">Markdown</option>
+      <option value=".txt">Text</option>
+      <option value=".py">Python</option>
+      <option value=".ipynb">Notebooks</option>
+    </select>
+    <select id="since">
+      <option value="">Any time</option>
+      <option value="1d">Past day</option>
+      <option value="7d">Past week</option>
+      <option value="30d">Past month</option>
+      <option value="365d">Past year</option>
+    </select>
+    <input id="path" placeholder="path contains…" size="16" />
+  </div>
+
+  <div id="answer"></div>
+  <div class="meta" id="meta"></div>
+  <div id="results"></div>
+</main>
+<div class="status" id="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function highlight(text, q) {
+  let html = esc(text);
+  const terms = q.toLowerCase().match(/\w{3,}/g) || [];
+  for (const t of terms) {
+    html = html.replace(new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "<mark>$1</mark>");
+  }
+  return html;
+}
+
+function params(q) {
+  const p = new URLSearchParams({ q, mode: $("mode").value, limit: 25 });
+  if ($("ext").value) p.append("ext", $("ext").value);
+  if ($("since").value) p.set("since", $("since").value);
+  if ($("path").value.trim()) p.set("path", $("path").value.trim());
+  return p;
+}
+
+function render(results, q) {
+  $("results").innerHTML = results.map((r) => {
+    const dir = r.path.slice(0, r.path.length - r.name.length);
+    const date = new Date(r.modified * 1000).toLocaleDateString();
+    return `<div class="result">
+      <div class="name" data-path="${esc(r.path)}">${esc(r.name)}</div>
+      <div class="path">${esc(dir)}</div>
+      <div class="snip">${highlight(r.snippet, q)}</div>
+      <div class="tags">${r.matched_by.map((m) => `<span class="tag">${m}</span>`).join("")}
+        <span class="spacer"></span><span>${date}</span>
+        <a data-reveal="${esc(r.path)}">show in folder</a></div>
+    </div>`;
+  }).join("");
+}
+
+async function search(e) {
+  e && e.preventDefault();
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("answer").innerHTML = "";
+  const t0 = performance.now();
+  const res = await fetch("/api/search?" + params(q));
+  const data = await res.json();
+  $("meta").textContent = `${data.results.length} results · ${Math.round(performance.now() - t0)} ms`;
+  render(data.results, q);
+}
+
+async function ask() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("answer").innerHTML = `<div class="answer">Thinking…</div>`;
+  const res = await fetch("/api/ask?" + new URLSearchParams({ q }));
+  const data = await res.json();
+  if (!res.ok) { $("answer").innerHTML = `<div class="answer">${esc(data.detail || "Error")}</div>`; return; }
+  $("answer").innerHTML = `<div class="answer">${esc(data.answer)}</div>`;
+  $("meta").textContent = "Sources";
+  render(data.sources, q);
+}
+
+async function openFile(path, reveal) {
+  await fetch("/api/open", { method: "POST", headers: { "Content-Type": "application/json" },
+                             body: JSON.stringify({ path, reveal }) });
+}
+
+$("results").addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.dataset.path) openFile(t.dataset.path, false);
+  if (t.dataset.reveal) openFile(t.dataset.reveal, true);
+});
+$("f").addEventListener("submit", search);
+$("askBtn").addEventListener("click", ask);
+["mode", "ext", "since"].forEach((id) => $(id).addEventListener("change", () => $("q").value && search()));
+
+async function status() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    $("status").textContent = `${s.indexing ? "Indexing… " : ""}${s.files} files indexed · ${s.embedder || ""}`;
+  } catch {}
+}
+status(); setInterval(status, 4000);
+</script>
+</body>
+</html>

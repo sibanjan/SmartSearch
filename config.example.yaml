@@ -1,0 +1,60 @@
+# Copy to config.yaml (in this folder) or ~/.smartsearch/config.yaml and edit.
+# Or generate one with:  smartsearch init ~/Documents ~/Projects
+
+# Folders to index. Windows paths work too, e.g. "C:/Users/you/Documents"
+roots:
+ - /
+ - ~/Documents
+ - ~/Desktop
+ - ~/Downloads
+
+
+  
+
+# Which file types to index (add/remove freely)
+extensions: [.txt, .md, .pdf, .docx, .pptx, .xlsx, .csv, .html, .json, .yaml, .ipynb,
+             .py, .js, .ts, .java, .go, .rs, .sql, .sh]
+
+# Folder names to skip anywhere in the tree
+exclude_dirs: [.git, node_modules, __pycache__, .venv, venv, env, dist, build, site-packages, .cache,
+               .smartsearch, .Trash, Library, AppData, "$RECYCLE.BIN",
+               # Linux
+               proc, sys, dev, run, tmp, snap, boot, lib, lib64, usr, var, etc, opt,
+               # macOS
+               System, Applications, private, Volumes, cores,
+               # Windows
+               Windows, "Program Files", "Program Files (x86)", ProgramData, "System Volume Information"]
+skip_hidden: true
+max_file_size_mb: 25
+
+# Text chunking (characters)
+chunk_size: 1000
+chunk_overlap: 150
+
+# Embeddings
+#   auto                  -> use sentence-transformers if installed, else hash fallback
+#   sentence-transformers -> require the neural model
+#   hash                  -> lexical only, no ML download
+embedder: auto
+# Small & fast (default). Better quality options:
+#   BAAI/bge-small-en-v1.5
+#   intfloat/multilingual-e5-small   (many languages)
+model_name: sentence-transformers/all-MiniLM-L6-v2
+batch_size: 32
+
+# Where the index database lives
+index_dir: ~/.smartsearch
+
+# Ranking weights for Reciprocal Rank Fusion
+default_limit: 10
+semantic_weight: 1.0
+keyword_weight: 1.0
+filename_weight: 0.6
+
+# Optional local LLM for `smartsearch ask` (https://ollama.com)
+ollama_url: http://localhost:11434
+ollama_model: llama3.2
+
+# Web UI (keep host at 127.0.0.1 so only your laptop can reach it)
+host: 127.0.0.1
+port: 8765

@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "SmartSearch: Web UI (serve)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "smartsearch",
+      "args": ["serve"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "SmartSearch: Index",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "smartsearch",
+      "args": ["index"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "SmartSearch: Search (prompt)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "smartsearch",
+      "args": ["search", "${input:query}"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "SmartSearch: Ask AI (prompt)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "smartsearch",
+      "args": ["ask", "${input:query}"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q"],
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "inputs": [
+    { "id": "query", "type": "promptString", "description": "Search query" }
+  ]
+}

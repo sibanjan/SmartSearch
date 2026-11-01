@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Run tests", "type": "shell", "command": "python -m pytest -q", "group": "test" },
+    { "label": "Lint (ruff)", "type": "shell", "command": "python -m ruff check src tests" },
+    { "label": "Index files", "type": "shell", "command": "python -m smartsearch index" },
+    { "label": "Start web UI", "type": "shell", "command": "python -m smartsearch serve", "isBackground": true }
+  ]
+}

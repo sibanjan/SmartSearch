@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartsearch"
+version = "0.1.0"
+description = "Private, local AI-powered semantic + keyword search over your laptop's files."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Sibanjan Das" }]
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "watchdog>=4.0",
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "python-pptx>=0.6.23",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+# Semantic (neural) embeddings. Without this the app falls back to a
+# lightweight lexical "hash" embedder so it still works fully offline.
+ai = ["sentence-transformers>=3.0"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.5"]
+
+[project.scripts]
+smartsearch = "smartsearch.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+smartsearch = ["web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+# Typer/FastAPI declare options via function calls in defaults (Option/Query)
+ignore = ["B008", "B905", "E501"]  # line length is handled by the formatter
