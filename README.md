@@ -76,6 +76,39 @@ Keep the index fresh without the UI: `smartsearch watch`.
 The top matching excerpts are sent to the local model, which answers with
 `[n]` citations to your files. Use the **Ask AI** button in the web UI too.
 
+## 5. Categorise images by content
+
+Images are never moved or copied: each one is *linked* to its categories in the
+index database and stays where it is.
+
+```bash
+smartsearch images scan                      # find + embed images (local CLIP model, ~600 MB first run)
+smartsearch images categories                # counts per category
+smartsearch images list receipts             # full original paths, best matches first
+smartsearch images list receipts --primary   # only images whose best match is receipts
+smartsearch images list receipts --json      # for scripts
+```
+
+Each image is scored against the categories in `image_categories` (name → text
+prompt, editable in `config.yaml`; re-apply with `images categories -r`, no
+re-scan needed). An image that confidently matches its top category
+(`image_min_confidence`) is linked to it, and also to any other category scoring
+at least `image_label_threshold`, so one image can appear in several categories.
+Images with no confident match are grouped by visual similarity into auto-named
+`other-<concept>` categories. The **Images** tab in the web UI shows each
+category's images with their folders; click one to open it in place.
+
+The links live in `~/.smartsearch/index.db`, table `image_labels`. The
+`image_category_view` view joins them with the image details:
+
+```sql
+SELECT path, score, is_primary FROM image_category_view
+WHERE category = 'receipts' ORDER BY score DESC;
+```
+
+Scan only some folders with `smartsearch images scan "C:\Users\me\Pictures"`, or
+set `image_roots` in the config. Images under `image_min_size_kb` (icons) are skipped.
+
 ---
 
 ## Working in VS Code
@@ -101,6 +134,7 @@ src/smartsearch/
   search.py      hybrid search + RRF fusion + filters
   watcher.py     live re-indexing with watchdog
   llm.py         Ollama Q&A
+  images.py      CLIP image categories + clustering, linked in the DB
   engine.py      wires everything together (used by CLI + web)
   cli.py         Typer CLI
   web/app.py     FastAPI JSON API + static UI
@@ -111,7 +145,7 @@ tests/           pytest suite (runs offline with the hash embedder)
 ## Ideas for next enhancements
 
 - **OCR** for scanned PDFs/images: `pytesseract` in `extractors.py`
-- **Image search** by content with a CLIP model (`sentence-transformers/clip-ViT-B-32`)
+- **Image search by text** ("beach at sunset") reusing the stored CLIP image embeddings
 - **Faster vectors at scale**: swap the numpy matrix in `store.py` for FAISS, `sqlite-vec` or LanceDB
 - **Re-ranking** the top 50 with a cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
 - **Run at login**: Task Scheduler (Windows), launchd (macOS), systemd user service (Linux) running `smartsearch watch`

@@ -14,6 +14,7 @@ from pathlib import Path
 from . import llm
 from .config import Config, load_config
 from .embedder import Embedder, make_embedder
+from .images import ImageCatalog
 from .indexer import Indexer
 from .search import Searcher, SearchFilters, SearchResult
 from .store import Store
@@ -35,6 +36,10 @@ class Engine:
     @cached_property
     def searcher(self) -> Searcher:
         return Searcher(self.cfg, self.store, self.embedder)
+
+    @cached_property
+    def images(self) -> ImageCatalog:
+        return ImageCatalog(self.cfg, self.store)
 
     def search(
         self,

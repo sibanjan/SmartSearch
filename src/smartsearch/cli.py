@@ -254,5 +254,85 @@ def doctor(config: Optional[Path] = ConfigOpt) -> None:
     console.print(f"  index: {cfg.db_path}")
 
 
+images_app = typer.Typer(help="Find images and link them to categories by content (files stay put).")
+app.add_typer(images_app, name="images")
+
+
+def _print_categories(counts: dict[str, int]) -> None:
+    t = Table("Category", "Images")
+    for name, n in counts.items():
+        t.add_row(escape(name), str(n))
+    console.print(t)
+
+
+@images_app.command("scan")
+def images_scan(
+    folders: list[Path] = typer.Argument(None, help="Folders to scan (default: image_roots/roots)"),
+    config: Optional[Path] = ConfigOpt,
+) -> None:
+    """Find images, embed them with a local CLIP model, and categorise them."""
+    eng = _engine(config)
+    roots = [f.expanduser().resolve() for f in folders] if folders else None
+    console.print("Scanning: " + ", ".join(str(r) for r in (roots or eng.images.roots)))
+    start = time.time()
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as prog:
+        task = prog.add_task("Loading image model…")
+        _ = eng.images.encoder
+        rep = eng.images.scan(
+            roots,
+            progress=lambda p, i: prog.update(
+                task, description=f"[{i + 1}] {short_path(str(p))[-80:]}"
+            ),
+        )
+    console.print(
+        f"[green]✓ Done in {time.time() - start:.1f}s[/] — found {rep.scanned}, "
+        f"embedded {rep.added}, unchanged {rep.unchanged}, removed {rep.removed}, "
+        f"unreadable {len(rep.failed)}"
+    )
+    _print_categories(eng.images.summary())
+
+
+@images_app.command("categories")
+def images_categories(
+    reclassify: bool = typer.Option(
+        False, "--reclassify", "-r", help="Re-apply categories after editing config"
+    ),
+    config: Optional[Path] = ConfigOpt,
+) -> None:
+    """Show how many images are in each category."""
+    eng = _engine(config)
+    _print_categories(eng.images.classify() if reclassify else eng.images.summary())
+
+
+@images_app.command("list")
+def images_list(
+    category: str = typer.Argument(..., help="Category name, e.g. receipts"),
+    limit: int = typer.Option(50, "--limit", "-n"),
+    primary: bool = typer.Option(False, "--primary", help="Only images whose best match this is"),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    config: Optional[Path] = ConfigOpt,
+) -> None:
+    """List images linked to a category, at their original locations (best matches first)."""
+    eng = _engine(config)
+    images = eng.images.list(category, limit, primary_only=primary)
+    if as_json:
+        print(json.dumps(images, indent=2))
+        return
+    if not images:
+        console.print(f"[yellow]No images in '{escape(category)}'.[/] See [bold]smartsearch images categories[/]")
+        return
+    for img in images:
+        labels = ", ".join(
+            f"{lb['category']} {lb['score']:.0%}" for lb in img["labels"] if lb["source"] == "prompt"
+        )
+        console.print(f"{escape(img['path'])}  [dim]{escape(labels)}[/]")
+
+
 if __name__ == "__main__":
     app()
