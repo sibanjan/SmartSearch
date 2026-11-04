@@ -89,6 +89,28 @@ DEFAULT_EXCLUDE_DIRS = [
     ".smartsearch",
 ]
 
+DEFAULT_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"]
+
+# category name (also the folder name when organising) -> text prompt CLIP matches against
+DEFAULT_IMAGE_CATEGORIES = {
+    "people": "a photo of a person or a group of people",
+    "pets": "a photo of a pet cat or dog",
+    "animals": "a photo of a wild animal or bird",
+    "nature": "a landscape photo of nature, mountains, a beach, the sky or a forest",
+    "city": "a photo of buildings, streets or a city",
+    "food": "a photo of food or a meal",
+    "vehicles": "a photo of a car, motorbike, train or airplane",
+    "events": "a photo of a celebration, party, wedding or festival",
+    "documents": "a scanned document, form or page of printed text",
+    "receipts": "a photo of a receipt, invoice or bill",
+    "screenshots": "a screenshot of a computer or phone screen",
+    "charts": "a chart, graph, plot or data visualization",
+    "diagrams": "a diagram, flowchart or architecture drawing",
+    "slides": "a presentation slide",
+    "logos-icons": "a logo, icon or simple graphic",
+    "art": "a painting, drawing or illustration",
+}
+
 
 @dataclass
 class Config:
@@ -119,6 +141,17 @@ class Config:
     # local LLM (optional, for `ask`) via Ollama
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+
+    # images: `smartsearch images ...` (needs the [ai] extra; CLIP runs locally)
+    image_roots: list[str] = field(default_factory=list)  # empty = same as roots
+    image_extensions: list[str] = field(default_factory=lambda: list(DEFAULT_IMAGE_EXTENSIONS))
+    image_min_size_kb: float = 20.0  # skip tiny icons/thumbnails
+    image_model: str = "clip-ViT-B-32"
+    image_categories: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_IMAGE_CATEGORIES))
+    image_min_confidence: float = 0.35  # top category probability needed to assign it
+    image_label_threshold: float = 0.25  # also link an image to any category scoring this high
+    image_clusters: int = 0  # clusters for leftover images; 0 = automatic
+    image_min_cluster_size: int = 3
 
     # web UI
     host: str = "127.0.0.1"

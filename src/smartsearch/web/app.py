@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from ..engine import Engine
@@ -69,10 +70,42 @@ def create_app(engine: Engine, watch: bool = True, index_on_start: bool = True) 
             raise HTTPException(503, str(exc)) from exc
         return {"answer": answer, "sources": [r.to_dict() for r in results]}
 
+    @app.get("/api/images/categories")
+    def api_image_categories():
+        return {"categories": engine.images.summary(), "total": engine.images.count()}
+
+    @app.get("/api/images")
+    def api_images(
+        category: str | None = None,
+        limit: int = Query(120, le=500),
+        offset: int = 0,
+        primary: bool = False,
+    ):
+        return {"images": engine.images.list(category, limit, offset, primary_only=primary)}
+
+    @app.get("/api/images/thumb")
+    def api_image_thumb(path: str, size: int = Query(256, le=1024)):
+        # Only serve images that are in the image index.
+        if not engine.images.is_indexed(path):
+            raise HTTPException(404, "Image is not in the index")
+        from PIL import Image
+
+        try:
+            with Image.open(path) as img:
+                img.draft("RGB", (size, size))
+                img = img.convert("RGB")
+                img.thumbnail((size, size))
+                buf = io.BytesIO()
+                img.save(buf, "JPEG", quality=80)
+        except OSError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return Response(buf.getvalue(), media_type="image/jpeg",
+                        headers={"Cache-Control": "max-age=3600"})
+
     @app.post("/api/open")
     def api_open(req: OpenRequest):
         # Only allow opening files that are actually in the index.
-        if not engine.is_indexed(req.path):
+        if not (engine.is_indexed(req.path) or engine.images.is_indexed(req.path)):
             raise HTTPException(404, "File is not in the index")
         engine.open_path(req.path, reveal=req.reveal)
         return {"ok": True}

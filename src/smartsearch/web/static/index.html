@@ -43,6 +43,19 @@
   .tags a { color: var(--muted); cursor: pointer; }
   .answer { background: var(--accent-soft); border-radius: 12px; padding: 16px; margin-bottom: 16px;
             white-space: pre-wrap; }
+  .views { display: flex; gap: 16px; margin: -16px 0 20px; font-size: 14px; }
+  .views a { color: var(--muted); cursor: pointer; padding-bottom: 2px; }
+  .views a.on { color: var(--accent); border-bottom: 2px solid var(--accent); }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .cats button { font-size: 13px; padding: 4px 12px; border-radius: 999px; }
+  .cats button.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .tile img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: pointer; background: var(--line); }
+  .tile .cap { padding: 6px 8px; font-size: 12px; }
+  .tile .cap div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .cap .lbl { color: var(--muted); }
+  .hidden { display: none; }
   .status { position: fixed; bottom: 12px; right: 16px; font-size: 12px; color: var(--muted); }
   @media (max-width: 600px) { form { flex-wrap: wrap; } form button { padding: 10px 14px; } }
 </style>
@@ -52,6 +65,15 @@
   <h1>SmartSearch</h1>
   <p class="sub">Ask in plain language — searches meaning, keywords and file names. Everything stays on this computer.</p>
 
+  <nav class="views"><a id="vFiles" class="on">Files</a><a id="vImages">Images</a></nav>
+
+  <section id="imagesView" class="hidden">
+    <div class="cats" id="cats"></div>
+    <div class="meta" id="imgMeta"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="filesView">
   <form id="f">
     <input id="q" type="search" placeholder="e.g. invoice from the plumber last spring" autofocus autocomplete="off" />
     <button class="primary" type="submit">Search</button>
@@ -88,6 +110,7 @@
   <div id="answer"></div>
   <div class="meta" id="meta"></div>
   <div id="results"></div>
+  </section>
 </main>
 <div class="status" id="status"></div>
 
@@ -164,6 +187,60 @@ $("results").addEventListener("click", (e) => {
 $("f").addEventListener("submit", search);
 $("askBtn").addEventListener("click", ask);
 ["mode", "ext", "since"].forEach((id) => $(id).addEventListener("change", () => $("q").value && search()));
+
+let activeCat = null;
+async function loadCategories() {
+  const { categories, total } = await (await fetch("/api/images/categories")).json();
+  const names = Object.keys(categories);
+  if (!names.length) {
+    $("cats").innerHTML = "";
+    $("imgMeta").textContent = "No images yet. Run: smartsearch images scan";
+    $("grid").innerHTML = "";
+    return;
+  }
+  $("cats").innerHTML = [`<button data-cat="" class="${activeCat ? "" : "on"}">All ${total}</button>`]
+    .concat(names.map((n) => `<button data-cat="${esc(n)}" class="${n === activeCat ? "on" : ""}">${esc(n)} ${categories[n]}</button>`))
+    .join("");
+  loadImages();
+}
+
+async function loadImages() {
+  const p = new URLSearchParams({ limit: 200 });
+  if (activeCat) p.set("category", activeCat);
+  const { images } = await (await fetch("/api/images?" + p)).json();
+  $("imgMeta").textContent = `${images.length} images${images.length === 200 ? " (showing the first 200)" : ""}`;
+  $("grid").innerHTML = images.map((im) => {
+    const lbl = im.labels.map((l) => l.source === "prompt" ? `${l.category} ${Math.round(l.score * 100)}%` : l.category)
+      .join(" · ") || im.category;
+    return `<div class="tile">
+      <img loading="lazy" data-path="${esc(im.path)}" title="${esc(im.path)}"
+           src="/api/images/thumb?${new URLSearchParams({ path: im.path })}" alt="${esc(im.name)}" />
+      <div class="cap"><div>${esc(im.name)}</div><div class="lbl" title="${esc(im.folder)}">${esc(im.folder)}</div>
+        <div class="lbl" title="${esc(lbl)}">${esc(lbl)}</div>
+        <div><a data-reveal="${esc(im.path)}" style="color:var(--muted);cursor:pointer">show in folder</a></div></div>
+    </div>`;
+  }).join("");
+}
+
+function showView(images) {
+  $("imagesView").classList.toggle("hidden", !images);
+  $("filesView").classList.toggle("hidden", images);
+  $("vImages").classList.toggle("on", images);
+  $("vFiles").classList.toggle("on", !images);
+  if (images) loadCategories();
+}
+$("vFiles").addEventListener("click", () => showView(false));
+$("vImages").addEventListener("click", () => showView(true));
+$("cats").addEventListener("click", (e) => {
+  if (e.target.dataset.cat === undefined) return;
+  activeCat = e.target.dataset.cat || null;
+  loadCategories();
+});
+$("grid").addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.dataset.path) openFile(t.dataset.path, false);
+  if (t.dataset.reveal) openFile(t.dataset.reveal, true);
+});
 
 async function status() {
   try {
