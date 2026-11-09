@@ -111,6 +111,18 @@ class ClipEncoder:
         return self._encode(texts)
 
 
+def make_image_encoder(model_name: str, batch_size: int = 16) -> ImageEncoder:
+    """ONNX Runtime for the CLIP models it knows (same vectors, no PyTorch), else PyTorch."""
+    from .onnx_backend import CLIP_ONNX, OnnxClipEncoder, available
+
+    if model_name in CLIP_ONNX and available():
+        try:
+            return OnnxClipEncoder(model_name, batch_size)
+        except Exception as exc:
+            log.warning("ONNX image model unavailable (%s); trying sentence-transformers", exc)
+    return ClipEncoder(model_name, batch_size)
+
+
 @dataclass
 class ScanReport:
     scanned: int = 0
@@ -163,7 +175,7 @@ class ImageCatalog:
         self.cfg = cfg
         self.store = store
         self.conn = store.conn
-        self._encoder_factory = encoder_factory or (lambda: ClipEncoder(cfg.image_model))
+        self._encoder_factory = encoder_factory or (lambda: make_image_encoder(cfg.image_model))
         self._encoder: ImageEncoder | None = None
         with store.lock:
             self.conn.executescript(SCHEMA)

@@ -1,5 +1,6 @@
 """Embedding backends.
 
+- OnnxTextEmbedder (onnx_backend.py): the default; the same models on ONNX Runtime.
 - SentenceTransformerEmbedder: neural semantic embeddings, runs fully on your
   laptop (CPU or GPU). Model is downloaded once from Hugging Face, then cached.
 - HashEmbedder: dependency-free fallback using feature hashing of words and
@@ -93,17 +94,34 @@ class SentenceTransformerEmbedder:
 
 
 def make_embedder(kind: str, model_name: str, batch_size: int = 32) -> Embedder:
+    """kind: "onnx" | "sentence-transformers" | "hash" | "auto".
+
+    auto tries ONNX Runtime first (Microsoft-signed, so Windows Smart App Control allows it,
+    and no PyTorch needed), then sentence-transformers, then the keyword-only hash embedder.
+    Both neural backends give the same vectors for the same model."""
     kind = kind.lower()
     if kind == "hash":
         return HashEmbedder()
-    try:
-        return SentenceTransformerEmbedder(model_name, batch_size)
-    except Exception as exc:
-        if kind == "sentence-transformers":
-            raise
-        log.warning(
-            "Semantic model unavailable (%s). Falling back to lexical hash embedder. "
-            "Install with: pip install -e '.[ai]'",
-            exc,
-        )
-        return HashEmbedder()
+    errors: list[str] = []
+    if kind in ("auto", "onnx"):
+        try:
+            from .onnx_backend import OnnxTextEmbedder
+
+            return OnnxTextEmbedder(model_name, batch_size)
+        except Exception as exc:
+            if kind == "onnx":
+                raise
+            errors.append(f"ONNX Runtime: {exc}")
+    if kind in ("auto", "sentence-transformers"):
+        try:
+            return SentenceTransformerEmbedder(model_name, batch_size)
+        except Exception as exc:
+            if kind == "sentence-transformers":
+                raise
+            errors.append(f"sentence-transformers: {exc}")
+    log.warning(
+        "Semantic model unavailable (%s). Falling back to the keyword-only hash embedder. "
+        "Install with: pip install -e '.[onnx]'",
+        "; ".join(errors) or kind,
+    )
+    return HashEmbedder()

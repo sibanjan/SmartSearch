@@ -124,7 +124,7 @@ class Config:
     chunk_size: int = 1000  # characters
     chunk_overlap: int = 150
 
-    # embeddings: "sentence-transformers" | "hash" | "auto"
+    # embeddings: "auto" (ONNX, then sentence-transformers, then hash) | "onnx" | "sentence-transformers" | "hash"
     embedder: str = "auto"
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     batch_size: int = 32

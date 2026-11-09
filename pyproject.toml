@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smartsearch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Private, local AI-powered semantic + keyword search over your laptop's files."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,8 +26,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Semantic (neural) embeddings. Without this the app falls back to a
+# Semantic (neural) embeddings. Without one of these the app falls back to a
 # lightweight lexical "hash" embedder so it still works fully offline.
+# onnx: the default models on ONNX Runtime (small, no PyTorch, Microsoft-signed binaries).
+onnx = ["onnxruntime>=1.18", "tokenizers>=0.15", "huggingface_hub>=0.20"]
+# ai: sentence-transformers and PyTorch, for models without an ONNX export.
 ai = ["sentence-transformers>=3.0"]
 dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.5"]
 
