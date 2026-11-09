@@ -20,6 +20,7 @@ from rich.table import Table
 from .config import DEFAULT_HOME, Config, load_config
 from .engine import Engine
 from .search import SearchFilters, human_size, parse_since, short_path
+from .writer import IndexBusy, ensure_can_write
 
 app = typer.Typer(help="SmartSearch — private AI search over your files.", no_args_is_help=True)
 console = Console()
@@ -42,8 +43,17 @@ def main(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
     _setup_logging(verbose)
 
 
-def _engine(config: Optional[Path]) -> Engine:
-    return Engine(load_config(config))
+def _engine(config: Optional[Path], write: bool = False) -> Engine:
+    """write=True for commands that change the index: they refuse while the SmartSearch
+    daemon runs on it, because the daemon must be the index's only writer."""
+    cfg = load_config(config)
+    if write:
+        try:
+            ensure_can_write(cfg.index_dir)
+        except IndexBusy as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1) from exc
+    return Engine(cfg)
 
 
 def _filters(ext: list[str], path: Optional[str], since: Optional[str]) -> SearchFilters:
@@ -77,7 +87,7 @@ def index(
     rebuild: bool = typer.Option(False, "--rebuild", help="Re-index every file from scratch"),
 ) -> None:
     """Scan folders and update the index (only changed files are re-processed)."""
-    eng = _engine(config)
+    eng = _engine(config, write=True)
     console.print(f"Embedder: [cyan]{eng.embedder.name}[/]   Roots: " + ", ".join(eng.cfg.roots))
     if rebuild:
         eng.store.clear()
@@ -172,7 +182,7 @@ def watch(config: Optional[Path] = ConfigOpt) -> None:
     """Index once, then keep the index updated as files change (Ctrl+C to stop)."""
     from .watcher import start_watching
 
-    eng = _engine(config)
+    eng = _engine(config, write=True)
     rep = eng.indexer.run()
     console.print(f"[green]✓ Index ready[/] ({rep.scanned} files). Watching for changes…")
     observer, handler = start_watching(eng.indexer)
@@ -201,7 +211,7 @@ def serve(
 
     from .web.app import create_app
 
-    eng = _engine(config)
+    eng = _engine(config, write=True)
     host = host or eng.cfg.host
     port = port or eng.cfg.port
     web_app = create_app(eng, watch=not no_watch)
@@ -271,7 +281,7 @@ def images_scan(
     config: Optional[Path] = ConfigOpt,
 ) -> None:
     """Find images, embed them with a local CLIP model, and categorise them."""
-    eng = _engine(config)
+    eng = _engine(config, write=True)
     roots = [f.expanduser().resolve() for f in folders] if folders else None
     console.print("Scanning: " + ", ".join(str(r) for r in (roots or eng.images.roots)))
     start = time.time()
@@ -306,7 +316,7 @@ def images_categories(
     config: Optional[Path] = ConfigOpt,
 ) -> None:
     """Show how many images are in each category."""
-    eng = _engine(config)
+    eng = _engine(config, write=reclassify)
     _print_categories(eng.images.classify() if reclassify else eng.images.summary())
 
 
